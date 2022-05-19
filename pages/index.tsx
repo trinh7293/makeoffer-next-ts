@@ -1,9 +1,104 @@
-import type { NextPage } from 'next'
-import Head from 'next/head'
-import Image from 'next/image'
-import styles from '../styles/Home.module.css'
+import type { NextPage } from "next";
+import Head from "next/head";
+import Image from "next/image";
+import { useEffect, useState } from "react";
+import styles from "../styles/Home.module.css";
+import { Button } from "react-bootstrap";
+import io, { Socket } from "socket.io-client";
+import { DefaultEventsMap } from "socket.io/dist/typed-events";
+import {
+  Client2Server,
+  ProcessHandlingStatus,
+  Server2Client,
+} from "../utils/constant";
+import { MkOfferResult, SocketResponse } from "../utils/interfaces";
+
+let socket: Socket<DefaultEventsMap, DefaultEventsMap>;
+const RUN_ARR = [
+  ...Array(4)
+    .fill(1)
+    .map((v, i) => i + 1),
+];
 
 const Home: NextPage = () => {
+  const [results, setResults] = useState<MkOfferResult[]>([]);
+  const [handlingStatus, setHandlingStatus] = useState<ProcessHandlingStatus>(
+    ProcessHandlingStatus.STOPPED
+  );
+  useEffect(() => {
+    socketInitializer();
+  }, []);
+
+  const socketInitializer = async () => {
+    await fetch("/api/socket");
+    socket = io();
+
+    socket.on("connect", () => {
+      console.log("connected");
+    });
+
+    socket.on(Server2Client.UPDATE_RESULT, (results) => {
+      setResults(results);
+    });
+    socket.on(Server2Client.NO_MORE_ITEM, () => {
+      console.log("done");
+      setHandlingStatus(ProcessHandlingStatus.STOPPED);
+    });
+  };
+
+  const isRunning = () => {
+    return handlingStatus === ProcessHandlingStatus.RUNNING;
+  };
+  const isPause = () => {
+    return handlingStatus === ProcessHandlingStatus.PAUSED;
+  };
+  const isStop = () => {
+    return handlingStatus === ProcessHandlingStatus.STOPPED;
+  };
+  const getPlayText = () => {
+    return isPause() ? "Resume" : "Start";
+  };
+
+  const getPlayDisable = () => {
+    return isRunning();
+  };
+
+  const play = () => {
+    if (handlingStatus === ProcessHandlingStatus.PAUSED) {
+      resumePro();
+    } else {
+      startPro();
+    }
+  };
+
+  const startPro = () => {
+    console.log(111, "cli");
+    socket.emit(Client2Server.START_PROCESS, RUN_ARR, (res: SocketResponse) => {
+      if (res.error) {
+        console.log(res.status);
+        return;
+      } else {
+        setHandlingStatus(ProcessHandlingStatus.RUNNING);
+        setResults([]);
+      }
+    });
+  };
+  const resumePro = () => {
+    socket.emit(Client2Server.RESUME_PROCESS, null, (res: any) => {
+      setHandlingStatus(ProcessHandlingStatus.RUNNING);
+    });
+  };
+  const pauseProcess = () => {
+    socket.emit(Client2Server.PAUSE_PROCESS, null, (res: any) => {
+      setHandlingStatus(ProcessHandlingStatus.PAUSED);
+    });
+    // socket.emit(Client2Server.START_PROCESS, RUN_ARR);
+  };
+  const stopProcess = () => {
+    socket.emit(Client2Server.STOP_PROCESS, null, (res: any) => {
+      setHandlingStatus(ProcessHandlingStatus.STOPPED);
+    });
+  };
   return (
     <div className={styles.container}>
       <Head>
@@ -13,44 +108,23 @@ const Home: NextPage = () => {
       </Head>
 
       <main className={styles.main}>
-        <h1 className={styles.title}>
-          Welcome to <a href="https://nextjs.org">Next.js!</a>
-        </h1>
-
-        <p className={styles.description}>
-          Get started by editing{' '}
-          <code className={styles.code}>pages/index.tsx</code>
-        </p>
-
-        <div className={styles.grid}>
-          <a href="https://nextjs.org/docs" className={styles.card}>
-            <h2>Documentation &rarr;</h2>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className={styles.card}>
-            <h2>Learn &rarr;</h2>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/canary/examples"
-            className={styles.card}
-          >
-            <h2>Examples &rarr;</h2>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            className={styles.card}
-          >
-            <h2>Deploy &rarr;</h2>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
-        </div>
+        <Button disabled={getPlayDisable()} onClick={play}>
+          {getPlayText()}
+        </Button>
+        <Button disabled={!isRunning()} onClick={pauseProcess}>
+          Pause
+        </Button>
+        <Button disabled={isStop()} onClick={stopProcess}>
+          Stop
+        </Button>
+        <br />
+        <ul>
+          {results.map((r, index) => (
+            <li key={index}>
+              {r.url}: {r.status}
+            </li>
+          ))}
+        </ul>
       </main>
 
       <footer className={styles.footer}>
@@ -59,14 +133,14 @@ const Home: NextPage = () => {
           target="_blank"
           rel="noopener noreferrer"
         >
-          Powered by{' '}
+          Powered by{" "}
           <span className={styles.logo}>
             <Image src="/vercel.svg" alt="Vercel Logo" width={72} height={16} />
           </span>
         </a>
       </footer>
     </div>
-  )
-}
+  );
+};
 
-export default Home
+export default Home;

@@ -1,0 +1,17 @@
+export enum Client2Server {
+  START_PROCESS = "START_PROCESS",
+  PAUSE_PROCESS = "PAUSE_PROCESS",
+  RESUME_PROCESS = "RESUME_PROCESS",
+  STOP_PROCESS = "STOP_PROCESS",
+}
+
+export enum Server2Client {
+  UPDATE_RESULT = "UPDATE_RESULT",
+  NO_MORE_ITEM = "NO_MORE_ITEM",
+}
+
+export enum ProcessHandlingStatus {
+  RUNNING = "RUNNING",
+  STOPPED = "STOPPED",
+  PAUSED = "PAUSED",
+}
