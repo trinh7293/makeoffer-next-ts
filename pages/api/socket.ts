@@ -8,6 +8,7 @@ import {
   Server2Client,
 } from "../../utils/constant";
 import { MkOfferResult, SocketResponse } from "../../utils/interfaces";
+import { getCollInfo } from "../../utils/openseaHelper";
 
 let arrRun: string[] = [];
 let results: MkOfferResult[] = [];
@@ -118,6 +119,13 @@ export default function handler(req: NextApiRequest, res: any) {
         console.log("stopped");
         callback({ status: "ok" });
       });
+      socket.on(
+        Client2Server.GET_COLLECTION_INFO,
+        async (slug: string, callback) => {
+          const collectionInfo = await getCollInfo(slug);
+          callback(collectionInfo);
+        }
+      );
       socket.on("disconnect", () => {
         console.log("Client disconnected");
       });

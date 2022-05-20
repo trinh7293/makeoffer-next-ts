@@ -3,7 +3,7 @@ import Head from "next/head";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import styles from "../styles/Home.module.css";
-import { Button } from "react-bootstrap";
+import { Button, ButtonGroup, Form, FormText } from "react-bootstrap";
 import io, { Socket } from "socket.io-client";
 import { DefaultEventsMap } from "socket.io/dist/typed-events";
 import {
@@ -11,7 +11,17 @@ import {
   ProcessHandlingStatus,
   Server2Client,
 } from "../utils/constant";
-import { MkOfferResult, SocketResponse } from "../utils/interfaces";
+import {
+  CollectionInfo,
+  MkOfferResult,
+  SocketResponse,
+} from "../utils/interfaces";
+import {
+  BID_LIFETIME_OPTIONS_UI,
+  BID_OPTIONS,
+  BID_OPTIONS_UI,
+} from "../utils/clientConstant";
+import { fixNumber } from "../utils/number-helper";
 
 let socket: Socket<DefaultEventsMap, DefaultEventsMap>;
 const RUN_ARR = [
@@ -25,6 +35,18 @@ const Home: NextPage = () => {
   const [handlingStatus, setHandlingStatus] = useState<ProcessHandlingStatus>(
     ProcessHandlingStatus.STOPPED
   );
+  const [bidLifeTime, setBidLifeTime] = useState<number>(
+    BID_LIFETIME_OPTIONS_UI[0].value
+  );
+  const [collectionSlug, setCollectionSlug] = useState<string>("");
+  const [bidOption, setBidOption] = useState<BID_OPTIONS>(
+    BID_OPTIONS.BELOW_PERCENT
+  );
+  const [bidCoefficient, setBidCoefficient] = useState<number>(0);
+  const [floorPrice, setFloorPrice] = useState<number>();
+  const [collectionName, setCollectionName] = useState<string>("");
+  const [arrayUrl, setArrayUrl] = useState<string[]>([]);
+
   useEffect(() => {
     socketInitializer();
   }, []);
@@ -45,24 +67,6 @@ const Home: NextPage = () => {
       setHandlingStatus(ProcessHandlingStatus.STOPPED);
     });
   };
-
-  const isRunning = () => {
-    return handlingStatus === ProcessHandlingStatus.RUNNING;
-  };
-  const isPause = () => {
-    return handlingStatus === ProcessHandlingStatus.PAUSED;
-  };
-  const isStop = () => {
-    return handlingStatus === ProcessHandlingStatus.STOPPED;
-  };
-  const getPlayText = () => {
-    return isPause() ? "Resume" : "Start";
-  };
-
-  const getPlayDisable = () => {
-    return isRunning();
-  };
-
   const play = () => {
     if (handlingStatus === ProcessHandlingStatus.PAUSED) {
       resumePro();
@@ -72,7 +76,6 @@ const Home: NextPage = () => {
   };
 
   const startPro = () => {
-    console.log(111, "cli");
     socket.emit(Client2Server.START_PROCESS, RUN_ARR, (res: SocketResponse) => {
       if (res.error) {
         console.log(res.status);
@@ -88,6 +91,16 @@ const Home: NextPage = () => {
       setHandlingStatus(ProcessHandlingStatus.RUNNING);
     });
   };
+  const getCollectionInfo = () => {
+    socket.emit(
+      Client2Server.GET_COLLECTION_INFO,
+      collectionSlug,
+      (colInfo: CollectionInfo) => {
+        setFloorPrice(colInfo.floorPrice);
+        setCollectionName(colInfo.name);
+      }
+    );
+  };
   const pauseProcess = () => {
     socket.emit(Client2Server.PAUSE_PROCESS, null, (res: any) => {
       setHandlingStatus(ProcessHandlingStatus.PAUSED);
@@ -99,6 +112,46 @@ const Home: NextPage = () => {
       setHandlingStatus(ProcessHandlingStatus.STOPPED);
     });
   };
+  const isRunning = () => {
+    return handlingStatus === ProcessHandlingStatus.RUNNING;
+  };
+  const isPause = () => {
+    return handlingStatus === ProcessHandlingStatus.PAUSED;
+  };
+  const isStop = () => {
+    return handlingStatus === ProcessHandlingStatus.STOPPED;
+  };
+  const getPlayText = () => {
+    return isPause() ? "Resume" : "Start";
+  };
+  const getBidValLabel = () => {
+    if (bidOption === BID_OPTIONS.FIXED) {
+      return "Bid Value";
+    }
+    return "Bid Percent";
+  };
+  const getBidPrice = () => {
+    if (bidCoefficient === null) {
+      return null;
+    }
+    if (bidOption === BID_OPTIONS.FIXED) {
+      return fixNumber(Number(bidCoefficient), 7);
+    }
+    if (!floorPrice) {
+      return null;
+    }
+    if (bidOption === BID_OPTIONS.BELOW_PERCENT) {
+      return fixNumber((1 - Number(bidCoefficient) / 100) * floorPrice, 7);
+    }
+    if (bidOption === BID_OPTIONS.ABOVE_PERCENT) {
+      return fixNumber((1 + Number(bidCoefficient) / 100) * floorPrice, 7);
+    }
+  };
+  const getPlayDisable = () => {
+    return (
+      isRunning() || (isStop() && (!getBidPrice() || arrayUrl.length === 0))
+    );
+  };
   return (
     <div className={styles.container}>
       <Head>
@@ -108,15 +161,103 @@ const Home: NextPage = () => {
       </Head>
 
       <main className={styles.main}>
-        <Button disabled={getPlayDisable()} onClick={play}>
-          {getPlayText()}
-        </Button>
-        <Button disabled={!isRunning()} onClick={pauseProcess}>
-          Pause
-        </Button>
-        <Button disabled={isStop()} onClick={stopProcess}>
-          Stop
-        </Button>
+        <Form onSubmit={play}>
+          <Form.Group className="mb-3" controlId="bidLifeTime">
+            <Form.Label>Bid life time</Form.Label>
+            <Form.Select
+              disabled={!isStop()}
+              value={bidLifeTime}
+              onChange={(e) => setBidLifeTime(Number(e.target.value))}
+            >
+              {BID_LIFETIME_OPTIONS_UI.map((item, k) => (
+                <option key={k} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+          <Form.Group className="mb-3" controlId="collectionSlug">
+            <Form.Label>Collection slug</Form.Label>
+            <Form.Control
+              disabled={!isStop()}
+              value={collectionSlug}
+              onChange={(e) => setCollectionSlug(e.target.value)}
+              type="text"
+              placeholder="Enter Slug"
+            />
+          </Form.Group>
+          <Button
+            disabled={bidOption === BID_OPTIONS.FIXED}
+            onClick={getCollectionInfo}
+          >
+            Get Collection Info
+          </Button>
+          <br />
+          <p>
+            Collection Name:{" "}
+            <span style={{ color: "green" }}>{collectionName}</span>
+          </p>
+          <p>
+            Floor Price: <span style={{ color: "green" }}>{floorPrice}</span>
+          </p>
+          <Form.Group className="mb-3" controlId="bidOption">
+            <Form.Label>Bid Option</Form.Label>
+            <Form.Select
+              disabled={!isStop()}
+              value={bidOption}
+              onChange={(e) => {
+                const val = e.target.value as BID_OPTIONS;
+                setBidOption(val);
+              }}
+            >
+              {BID_OPTIONS_UI.map((item, k) => (
+                <option key={k} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </Form.Select>
+          </Form.Group>
+          <Form.Group className="mb-3" controlId="bidCoefficient">
+            <Form.Label>{getBidValLabel()}</Form.Label>
+            <Form.Control
+              disabled={!isStop()}
+              value={bidCoefficient}
+              onChange={(e) => setBidCoefficient(Number(e.target.value))}
+              type="number"
+            />
+          </Form.Group>
+          <Form.Group className="mb-3" controlId="inputFile">
+            <Form.Label>Input File</Form.Label>
+            <Form.Control
+              disabled={!isStop()}
+              onChange={(e: any) => {
+                const file = e.target.files[0];
+                const fr = new FileReader();
+                fr.onload = function (res) {
+                  const str = res.target?.result as string;
+                  const arrResult = str.split(/\r\n|\n/).filter((line) => line);
+                  setArrayUrl(arrResult);
+                };
+                fr.readAsText(file);
+              }}
+              type="file"
+            />
+          </Form.Group>
+          <ButtonGroup size="lg" className="mb-2">
+            {/* <Button variant="primary" type="submit">
+            Submit
+          </Button> */}
+            <Button disabled={getPlayDisable()} onClick={play}>
+              {getPlayText()}
+            </Button>
+            <Button disabled={!isRunning()} onClick={pauseProcess}>
+              Pause
+            </Button>
+            <Button disabled={isStop()} onClick={stopProcess}>
+              Stop
+            </Button>
+          </ButtonGroup>
+        </Form>
         <br />
         <ul>
           {results.map((r, index) => (

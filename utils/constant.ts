@@ -3,6 +3,7 @@ export enum Client2Server {
   PAUSE_PROCESS = "PAUSE_PROCESS",
   RESUME_PROCESS = "RESUME_PROCESS",
   STOP_PROCESS = "STOP_PROCESS",
+  GET_COLLECTION_INFO = "GET_COLLECTION_INFO",
 }
 
 export enum Server2Client {
