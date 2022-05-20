@@ -1,26 +1,47 @@
 // Next.js API route support: https://nextjs.org/docs/api-routes/introduction
-import type { NextApiRequest, NextApiResponse } from "next";
+import type { NextApiRequest } from "next";
 import { Server, Socket } from "socket.io";
 import { DefaultEventsMap } from "socket.io/dist/typed-events";
+import { BID_OPTIONS } from "../../utils/clientConstant";
 import {
   Client2Server,
   ProcessHandlingStatus,
   Server2Client,
 } from "../../utils/constant";
-import { MkOfferResult, SocketResponse } from "../../utils/interfaces";
-import { getCollInfo } from "../../utils/openseaHelper";
+import {
+  AssetInfoQuery,
+  MkOfferResult,
+  RunningInfo,
+  SocketResponse,
+} from "../../utils/interfaces";
+import { calBidPrice, getCollInfo, makeOffer } from "../../utils/openseaHelper";
 
-let arrRun: string[] = [];
+let arrRun: AssetInfoQuery[] = [];
 let results: MkOfferResult[] = [];
 let handlingStatus = ProcessHandlingStatus.STOPPED;
 let indexRunning = 0;
+let bidLifeTime: number | null = null;
+let bidPrice: number | null = null;
+let collectionSlug: string | null = null;
+let bidOption: BID_OPTIONS | null = null;
+let bidCoefficient: number | null = null;
+
+const refreshFloorPrice = async () => {
+  try {
+    const returnResult = await getCollInfo(collectionSlug || "");
+    if (returnResult && bidCoefficient !== null && bidOption !== null) {
+      const floorPrice = returnResult.floorPrice;
+      bidPrice = calBidPrice(bidCoefficient, bidOption, floorPrice);
+      console.log(
+        `floor-price refreshed, new val: floor: ${floorPrice}, bidPrice: ${bidPrice}`
+      );
+    }
+  } catch (error) {}
+};
 
 const runProcess = async (
   socket: Socket<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>
 ) => {
-  console.log("runProcess");
-  console.log("indexRunning", indexRunning);
-  console.log("arrRun", arrRun);
   while (indexRunning < arrRun.length) {
     if (
       [ProcessHandlingStatus.PAUSED, ProcessHandlingStatus.STOPPED].includes(
@@ -30,13 +51,13 @@ const runProcess = async (
       break;
     }
     console.log("start make offer item: ", arrRun[indexRunning]);
-    // if (
-    //   bidOption !== BID_OPTIONS.FIXED &&
-    //   indexRunning > 0 &&
-    //   indexRunning % 10 === 0
-    // ) {
-    //   refreshFloorPrice();
-    // }
+    if (
+      bidOption !== BID_OPTIONS.FIXED &&
+      indexRunning > 0 &&
+      indexRunning % 10 === 0
+    ) {
+      refreshFloorPrice();
+    }
     handleMkOffer(arrRun[indexRunning], socket);
     if (indexRunning === arrRun.length - 1) {
       socket.broadcast.emit(Server2Client.NO_MORE_ITEM);
@@ -51,21 +72,23 @@ const runProcess = async (
 const sleep = (ms: number) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
-
 const handleMkOffer = async (
-  url: string,
+  item: AssetInfoQuery,
   socket: Socket<DefaultEventsMap, DefaultEventsMap, DefaultEventsMap, any>
 ) => {
-  const resultMkOff: MkOfferResult = {
-    status: "Success",
-    url,
-  };
+  const { contractAddress, tokenId } = item;
+  const result: MkOfferResult = { contractAddress, tokenId, status: "Success" };
   try {
-    await sleep(2000);
+    await makeOffer(
+      contractAddress,
+      tokenId,
+      Number(bidLifeTime),
+      Number(bidPrice)
+    );
   } catch (error) {
-    resultMkOff.status = `Fail: ${error}`;
+    result.status = `Fail: $${error}`;
   } finally {
-    results.push(resultMkOff);
+    results.push(result);
     socket.broadcast.emit(Server2Client.UPDATE_RESULT, results);
   }
 };
@@ -80,7 +103,7 @@ export default function handler(req: NextApiRequest, res: any) {
 
     io.on("connection", (socket) => {
       socket.emit(Server2Client.UPDATE_RESULT, results);
-      socket.on(Client2Server.START_PROCESS, (arr_run: string[], cb) => {
+      socket.on(Client2Server.START_PROCESS, (runningInfo: RunningInfo, cb) => {
         if (handlingStatus !== ProcessHandlingStatus.STOPPED) {
           const status = "you could not run multiple processes";
           console.log(status);
@@ -91,8 +114,13 @@ export default function handler(req: NextApiRequest, res: any) {
           cb(resultFailed);
           return;
         }
+        arrRun = runningInfo.items;
+        bidLifeTime = runningInfo.bidLifeTime;
+        bidPrice = runningInfo.bidPrice;
+        collectionSlug = runningInfo.collectionSlug;
+        bidOption = runningInfo.bidOption;
+        bidCoefficient = runningInfo.bidCoefficient;
         handlingStatus = ProcessHandlingStatus.RUNNING;
-        arrRun = arr_run;
         results = [];
         indexRunning = 0;
         runProcess(socket);
