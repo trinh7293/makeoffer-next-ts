@@ -195,10 +195,10 @@ const Home: NextPage = () => {
           <br />
           <p>
             Collection Name:{" "}
-            <span style={{ color: "green" }}>{collectionName}</span>
+            <span style={{ color: "yellow" }}>{collectionName}</span>
           </p>
           <p>
-            Floor Price: <span style={{ color: "green" }}>{floorPrice}</span>
+            Floor Price: <span style={{ color: "yellow" }}>{floorPrice}</span>
           </p>
           <Form.Group className="mb-3" controlId="bidOption">
             <Form.Label>Bid Option</Form.Label>

@@ -1,5 +1,6 @@
 .container {
   padding: 0 2rem;
+  background-image: url("/background-sky2.jpg");
 }
 
 .main {
@@ -10,6 +11,7 @@
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  color: #fff;
 }
 
 .footer {
