@@ -1,5 +1,5 @@
 import { BID_OPTIONS } from "./clientConstant";
-import { config } from "./config";
+import { config } from "../config";
 import { CollectionInfo } from "./interfaces";
 import { fixNumber } from "./number-helper";
 require("isomorphic-fetch");
