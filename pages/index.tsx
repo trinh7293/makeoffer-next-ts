@@ -74,6 +74,14 @@ const Home: NextPage = () => {
     }
   };
 
+  const convertFile2Arr = async (e: any) => {
+    const file = e.target.files[0] as File;
+    const fileText = await file.text();
+    const arrResult = fileText.split(/\r\n|\n/).filter((line) => line);
+    console.log("arrResult", arrResult);
+    setArrayUrl(arrResult);
+  };
+
   const startPro = () => {
     const runningInfo: RunningInfo = {
       items: arrayUrl.map((url) => {
@@ -230,16 +238,7 @@ const Home: NextPage = () => {
             <Form.Label>Input File</Form.Label>
             <Form.Control
               disabled={!isStop()}
-              onChange={(e: any) => {
-                const file = e.target.files[0];
-                const fr = new FileReader();
-                fr.onload = function (res) {
-                  const str = res.target?.result as string;
-                  const arrResult = str.split(/\r\n|\n/).filter((line) => line);
-                  setArrayUrl(arrResult);
-                };
-                fr.readAsText(file);
-              }}
+              onChange={(e) => convertFile2Arr(e)}
               type="file"
             />
           </Form.Group>

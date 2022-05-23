@@ -98,7 +98,9 @@ export default function handler(req: NextApiRequest, res: any) {
     console.log("Socket is already running");
   } else {
     console.log("Socket is initializing");
-    const io = new Server(res.socket.server);
+    const io = new Server(res.socket.server, {
+      maxHttpBufferSize: 1e8,
+    });
     res.socket.server.io = io;
 
     io.on("connection", (socket) => {
